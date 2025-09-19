@@ -83,11 +83,26 @@ static void test_iterator_count_n3(void) {
     iterator_destroy(it);
 }
 
+/* Тест: при n > 63 итератор не инициализируется */
+static void test_iterator_too_large_n(void) {
+    iterator_t *it = malloc(sizeof *it);
+    assert(it != NULL);
+
+    unsigned n = 64; // недопустимое значение (> 63)
+    iterator_init(it, n);
+
+    // Проверяем, что сразу нет элементов
+    assert(!iterator_has_next(it));
+
+    iterator_destroy(it);
+}
+
 int main(void) {
     test_iterator_zero();
     test_iterator_init_basic();
     test_iterator_enumeration_n2();
     test_iterator_count_n3();
+    test_iterator_too_large_n();
 
     printf("Все тесты прошли!\n");
     return 0;
