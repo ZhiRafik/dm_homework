@@ -15,6 +15,9 @@ typedef struct Relation {
     size_t size;
 } Relation;
 
+// Для проверки дубликатов
+int containsPair(Relation *out, int a, int c);
+
 // Инициализация отношения
 void initRelation(Relation *r);
 

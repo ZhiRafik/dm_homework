@@ -129,21 +129,21 @@ static void test_join_multiple_matches_cartesian(void) {
     free(res);
 }
 
-static void test_join_duplicates_in_inputs(void) {
-    /* дубликаты во входах допустимы — результат может содержать дубликаты */
-    const Pair r_arr[] = { {1,2}, {1,2} };          /* два одинаковых (a,b) */
-    const Pair s_arr[] = { {2,5}, {2,5} };          /* два одинаковых (b,c) */
-    Relation r = make_rel(2, r_arr);
-    Relation s = make_rel(2, s_arr);
+static void test_join_duplicates_in_inputs_unacceptable(void) {
+    /* в отношении же не может быть дубликатов - как-то не подумал:/ */
+    const Pair r_arr[] = { {1,2}, {1,5}, {4, 8} };          /* различие элементы в отношениях  */
+    const Pair s_arr[] = { {2,7}, {5,7}, {8, 13} };          /* но которые ведут "к дубликатам"*/
+    Relation r = make_rel(3, r_arr);
+    Relation s = make_rel(3, s_arr);
 
-    Relation *res = join_binary(&r, &s);
+    Relation *res = join_binary(&r, &s);            /* в результате тогда должно быть {{1, 7}, {4, 13}}*/
     assert(res != NULL);
-    /* 2 на 2 = 4 пары (все одинаковые (1,5)) */
-    assert(res->size == 4);
-    for (size_t i = 0; i < res->size; ++i) {
-        assert(res->pairs[i].first == 1);
-        assert(res->pairs[i].second == 5);
-    }
+    assert(res->size == 2);
+    
+    assert(res->pairs[0].first == 1);
+    assert(res->pairs[0].second == 7);
+    assert(res->pairs[1].first == 4);
+    assert(res->pairs[1].second == 13);
 
     free_rel(&r);
     free_rel(&s);
@@ -158,7 +158,7 @@ int main(void) {
     test_join_no_matches();
     test_join_single_match();
     test_join_multiple_matches_cartesian();
-    test_join_duplicates_in_inputs();
+    test_join_duplicates_in_inputs_unacceptable();
     printf("Все тесты прошли успешно!\n");
 
     return 0;
