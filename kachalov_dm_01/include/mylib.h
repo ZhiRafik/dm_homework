@@ -1,38 +1,34 @@
 #ifndef MYLIB_H
 #define MYLIB_H
 
-#include <stdint.h>
 #include <stddef.h>
 
 typedef struct Set {
-    unsigned n; // максимальный элемент
-    uint64_t mask; // маска добавленных
+    unsigned n; // размер исходного множества {0..n-1}
+    unsigned char *digits; // digits[i] == 1, если i принадлежит подмножеству, иначе 0
 } set_t;
 
 typedef struct SetIterator {
-    set_t value;
-    uint64_t counter;
-    uint64_t limit;
+    set_t value; // текущее подмножество
+    unsigned char *state; // внутреннее число в двоичной СС: state[i] — бит i
+    int finished; // 0 — есть ещё значения; 1 — закончились
 } iterator_t;
 
-/* Инициализация итератора для множества {0,...,n-1}. 
-Начальное значение — пустое множество. */
-void iterator_init(iterator_t *it , unsigned n);
+// Инициализация итератора для {0,...,n-1}. Стартовое значение — пустое {}
+void iterator_init(iterator_t *it, unsigned n);
 
-/* Указатель на текущее подмножество. 
-Действителен до следующего вызова iterator_next(). */
+// Указатель на текущее подмножество (валидно до следующего iterator_next)
 const set_t *iterator_value(const iterator_t *it);
 
-/* Есть ли ещё значения (текущее включительно). Возвращает 1/0. */
+// Есть ли ещё значения (текущее включительно): 1/0
 int iterator_has_next(const iterator_t *it);
 
-/* Переход к следующему подмножеству. */
+// Переход к следующему подмножеству (вызовать только если has_next(it))
 void iterator_next(iterator_t *it);
 
-/* Удаление итератора */
+// Освобождение внутренних буферов (сам it не освобождается)
 void iterator_destroy(iterator_t *it);
 
-/* Печать множества */
 void print_set(const set_t *s);
 
 #endif
