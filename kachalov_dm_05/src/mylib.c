@@ -1,5 +1,6 @@
 #include "../include/mylib.h"
 #include <math.h>
+#include <stdio.h>
 
 static const double almost_zero_epsilon = 1e-12; // порог сравнения с нулем
 
@@ -12,7 +13,7 @@ wurzeln_t finde_wurzeln(double a, double b) {
     wurzeln_t roots;
     double discriminant = a * a + 4.0 * b; // а у нас в D константен и равен 1 (ax^2 + bx + c, a = 1)
 
-    if (discriminant < -almost_zero_epsilon) { // на всякий
+    if (discriminant < -almost_zero_epsilon) { // на всякий, передаём в complex
         roots.r1 = NAN;
         roots.r2 = NAN;
         roots.equal = false;
@@ -67,58 +68,120 @@ konstanten_t finde_konstanten_doppelt(double repeated_root, double x1_value, dou
     return constants;
 }
 
-// Явная формула (double). Работает для любого дискриминанта. n>=1
-double xn_closed_form(double a, double b, double c, double d, uint64_t n) {
-    if (n == 1) {
-        return c;
-    }
-    if (n == 2) {
-        return d;
-    }
+closed_form_data_t compute_closed_form(double a, double b, double c, double d) {
+    closed_form_data_t data;
+    wurzeln_t roots;
+    double complex diff;
+    double complex A_complex;
+    double complex B_complex;
 
-    double discriminant = a * a + 4.0 * b;
+    data.a = a;
+    data.b = b;
+    data.discriminant = a * a + 4.0 * b;
+    data.complex_roots = false;
+    data.double_root = false;
+    data.A_complex = 0.0;
+    data.B_complex = 0.0;
 
-    if (discriminant > almost_zero_epsilon) {
-        double sqrt_discriminant = sqrt(discriminant);
-        double root1 = (a + sqrt_discriminant) / 2.0;
-        double root2 = (a - sqrt_discriminant) / 2.0;
-        konstanten_t constants = finde_konstanten(root1, root2, c, d);
-        double power1 = pow(root1, (double)(n - 1));
-        double power2 = pow(root2, (double)(n - 1));
-        return constants.c1 * power1 + constants.c2 * power2;
-    }
+    roots = finde_wurzeln(a, b);
 
-    if (is_almost_zero(discriminant)) {
-        double repeated_root = a / 2.0;
-        if (is_almost_zero(repeated_root)) {
-            return 0.0;
+    // Комплексные корни: finde_wurzeln помечает r1, r2 как NAN
+    if (isnan(roots.r1)) {
+        data.complex_roots = true;
+        finde_wurzeln_complex(a, b, &data.r1_complex, &data.r2_complex);
+        diff = data.r1_complex - data.r2_complex;
+
+        if (cabs(diff) <= almost_zero_epsilon) {
+            double complex repeated_root;
+            repeated_root = data.r1_complex;
+            A_complex = c;
+            if (cabs(repeated_root) <= almost_zero_epsilon) {
+                B_complex = 0.0;
+            } else {
+                B_complex = (d / repeated_root) - c;
+            }
+        } else {
+            A_complex = (d - c * data.r2_complex) / diff;
+            B_complex = (c * data.r1_complex - d) / diff;
         }
-        konstanten_t constants = finde_konstanten_doppelt(repeated_root, c, d);
-        double power = pow(repeated_root, (double)(n - 1));
-        double linear_factor = constants.c1 + constants.c2 * (double)(n - 1);
-        return linear_factor * power;
+
+        data.A_complex = A_complex;
+        data.B_complex = B_complex;
+        data.constants.c1 = NAN;
+        data.constants.c2 = NAN;
+        return data;
     }
 
-    double complex root1_complex;
-    double complex root2_complex;
-    finde_wurzeln_complex(a, b, &root1_complex, &root2_complex);
-
-    double complex denominator = root1_complex - root2_complex;
-    double complex A_constant;
-    double complex B_constant;
-
-    if (cabs(denominator) <= almost_zero_epsilon) {
-        double complex repeated_root_complex = root1_complex;
-        A_constant = c;
-        B_constant = (cabs(repeated_root_complex) <= almost_zero_epsilon) ? 0.0 : (d / repeated_root_complex - c);
-    } else {
-        A_constant = (d - c * root2_complex) / denominator;
-        B_constant = (c * root1_complex - d) / denominator;
+    // Кратный действительный корень
+    if (roots.equal) {
+        data.double_root = true;
+        data.r1 = roots.r1;
+        data.r2 = roots.r2;
+        data.constants = finde_konstanten_doppelt(data.r1, c, d);
+        data.A_complex = data.constants.c1;
+        data.B_complex = data.constants.c2;
+        return data;
     }
 
-    double complex power1_complex = cpow(root1_complex, (double)(n - 1));
-    double complex power2_complex = cpow(root2_complex, (double)(n - 1));
-    double complex result_complex = A_constant * power1_complex + B_constant * power2_complex;
+    // Два разных действительных корня
+    data.r1 = roots.r1;
+    data.r2 = roots.r2;
 
-    return creal(result_complex);
+    // Для печати формулы нужны A и B
+    data.constants = finde_konstanten(data.r1, data.r2, c, d);
+    data.A_complex = data.constants.c1;
+    data.B_complex = data.constants.c2;
+
+    return data;
+}
+
+void print_closed_form(const closed_form_data_t* data) {
+    if (!data) {
+        return;
+    }
+
+    double c_term;
+    char sign_c;
+    c_term = -data->b; // в уравнении r^2 - a r - b = 0 свободный член равен (-b)
+    sign_c = (c_term >= 0.0) ? '+' : '-';
+
+    
+    printf("Характеристическое уравнение: r^2 - %.3f r %c %.3f = 0\n", data->a, sign_c, fabs(c_term));
+    printf("Дискриминант D = %.6f\n", data->discriminant);
+
+    if (data->complex_roots) {
+        printf("Комплексные корни:\n");
+        printf("r1 = %.6f %+.6fi\n", creal(data->r1_complex), cimag(data->r1_complex));
+        printf("r2 = %.6f %+.6fi\n", creal(data->r2_complex), cimag(data->r2_complex));
+
+        printf("Коэффициенты:\n");
+        printf("A = %.6f %+.6fi\n", creal(data->A_complex), cimag(data->A_complex));
+        printf("B = %.6f %+.6fi\n", creal(data->B_complex), cimag(data->B_complex));
+
+        printf("Общий член:\n");
+        printf("x_n = (%.6f %+.6fi) * (%.6f %+.6fi)^(n-1) + "
+            "(%.6f %+.6fi) * (%.6f %+.6fi)^(n-1)\n",
+            creal(data->A_complex), cimag(data->A_complex),
+            creal(data->r1_complex), cimag(data->r1_complex),
+            creal(data->B_complex), cimag(data->B_complex),
+            creal(data->r2_complex), cimag(data->r2_complex));
+
+        return;
+    }
+
+    if (data->double_root) {
+        printf("Кратный корень: r = %.6f\n", data->r1);
+        printf("Общий член:\n");
+        printf("x_n = (%.6f + %.6f*(n - 1)) * (%.6f)^(n - 1)\n",
+               data->constants.c1, data->constants.c2, data->r1);
+
+
+        return;
+    }
+
+    printf("Два разных корня:\n");
+    printf("r1 = %.6f, r2 = %.6f\n", data->r1, data->r2);
+    printf("Общий член:\n");
+    printf("x_n = (%.6f) * (%.6f)^(n-1) + (%.6f) * (%.6f)^(n-1)\n",
+           data->constants.c1, data->r1, data->constants.c2, data->r2);
 }

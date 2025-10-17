@@ -1,79 +1,51 @@
-# =========================
-# Windows-friendly Makefile
-# =========================
+CC = gcc                           # используем компилятор gcc
+CFLAGS = -Wall -Werror -Wextra -std=c11 -Iinclude   # флаги: все предупреждения, ошибки, строгий стандарт C11, подключаем папку include
+GCOVFLAGS = -fprofile-arcs -ftest-coverage          # флаги для профилирования покрытия (gcov)
 
-# Компилятор и флаги
-CC = gcc
-CFLAGS = -Wall -Werror -Wextra -std=c11 -Iinclude
-LDFLAGS = -lm
-GCOVFLAGS = -fprofile-arcs -ftest-coverage
+APP_SRC = src/main.c               # исходный файл с функцией main
+LIB_SRC = src/mylib.c              # исходный файл с реализацией библиотеки
 
-# Запускаем команды через cmd.exe (для корректной работы del/rmdir)
-SHELL := cmd.exe
-.SHELLFLAGS := /Q /C
+APP_OBJ = $(APP_SRC:.c=.o)         # объектный файл для main.c
+LIB_OBJ = $(LIB_SRC:.c=.o)         # объектный файл для mylib.c
 
-# Windows-команды
-RM = del /F /Q
-RMDIR = rmdir /S /Q
-NULL = NUL
-EXE = .exe
+TEST_SRC = test/test.c             # тестовый исходник
+TEST_BIN = test/run                # исполняемый файл тестов
 
-# Пути и файлы
-APP_SRC = src/main.c
-LIB_SRC = src/mylib.c
-TEST_SRC = test/test.c
-LIB_OBJ = $(LIB_SRC:.c=.o)
-APP_OBJ = $(APP_SRC:.c=.o)
+LIB = mylib.a                      # статическая библиотека
+TARGET = bin/app                   # итоговый исполняемый файл программы
 
-LIB = lib\mylib.a
-BIN_DIR = bin
-TEST_BIN = test\run
-TARGET = $(BIN_DIR)\app
+all: $(TARGET) test                # цель по умолчанию: собрать приложение и тесты
 
-# -------------------------------------
-# Основная цель (по умолчанию) — all
-# -------------------------------------
-all: $(TARGET)$(EXE)
+lib: $(LIB)                        # цель для сборки только библиотеки
 
-# Сборка основного приложения
-$(TARGET)$(EXE): $(APP_OBJ) $(LIB)
-	@if not exist $(BIN_DIR) mkdir $(BIN_DIR)
-	$(CC) $(CFLAGS) $(APP_OBJ) $(LIB) -o $(TARGET)$(EXE) $(LDFLAGS)
-	@echo.
-	@echo === Приложение собрано: $(TARGET)$(EXE) ===
+$(LIB): $(LIB_OBJ)                 # правило сборки библиотеки только из объектника mylib.o
+	ar rcs $@ $^                   # создаём архив mylib.a из объектных файлов библиотеки
 
-# Сборка библиотеки
-lib: $(LIB)
+$(TARGET): $(APP_OBJ) $(LIB)       # правило сборки основного приложения
+	mkdir -p bin                   # создаём папку bin, если её нет
+	$(CC) $(CFLAGS) $(APP_OBJ) $(LIB) -o $@   # компилируем и линкуем main.o с библиотекой
 
-$(LIB): $(LIB_OBJ)
-	@if not exist lib mkdir lib
-	ar rcs $(LIB) $(LIB_OBJ)
-	@echo === Библиотека создана: $(LIB) ===
+%.o: %.c                           # шаблонное правило: как собирать .o из .c
+	$(CC) $(CFLAGS) -c $< -o $@    # компиляция .c в .o
 
-# Правило для .o файлов
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+test: $(LIB) $(TEST_SRC)           # цель для сборки и запуска тестов
+	$(CC) $(CFLAGS) $(TEST_SRC) $(LIB) -o $(TEST_BIN)  # компиляция тестов с библиотекой (без check!)
+	./$(TEST_BIN)                  # запуск собранного теста
 
-# -------------------------------------
-# Сборка и запуск тестов
-# -------------------------------------
-test: $(LIB) $(TEST_SRC)
-	$(CC) $(CFLAGS) $(TEST_SRC) $(LIB) -o $(TEST_BIN)$(EXE) $(LDFLAGS)
-	@echo.
-	@echo === Запуск тестов ===
-	$(TEST_BIN)$(EXE)
+gcov_report: CFLAGS += $(GCOVFLAGS)         # добавляем флаги gcov к CFLAGS
+gcov_report: clean $(APP_SRC) $(LIB_SRC) $(TEST_SRC)  # цель gcov_report зависит от очистки и исходников
+	$(CC) $(CFLAGS) $(APP_SRC) $(LIB_SRC) $(TEST_SRC) -o $(TEST_BIN) # сборка с флагами gcov
+	./$(TEST_BIN)                  # запуск тестов для сбора покрытия
+	lcov -t "mylib" -o coverage.info -c -d .   # снимаем покрытие в файл coverage.info
+	lcov --remove coverage.info "*/test/*" -o coverage.info  # убираем покрытие тестовых файлов
+	genhtml -o report coverage.info            # генерируем html-отчёт в папку report
 
-# -------------------------------------
-# Очистка проекта
-# -------------------------------------
-clean:
-	@echo Удаление временных файлов...
-	-$(RM) *.o 2>$(NULL)
-	-$(RM) src\*.o 2>$(NULL)
-	-$(RM) lib\*.a 2>$(NULL)
-	-$(RM) $(TARGET)$(EXE) 2>$(NULL)
-	-$(RM) $(TEST_BIN)$(EXE) 2>$(NULL)
-	-$(RMDIR) $(BIN_DIR) 2>$(NULL)
-	-$(RMDIR) report 2>$(NULL)
-	@echo Очистка завершена.
+leaks: test                        # цель проверки утечек памяти
+	leaks --atExit -- ./test/run   # macOS утилита leaks для поиска утечек
 
+clean:                             # очистка проекта
+	rm -f $(APP_OBJ) $(LIB_OBJ) $(LIB) *.gcno *.gcda *.gcov coverage.info  # удаляем объектники, lib и gcov-файлы
+	rm -f $(TARGET) $(TEST_BIN)     # удаляем исполняемые файлы
+	rm -rf report bin               # удаляем папки report и bin
+
+.PHONY: all lib clean test gcov_report leaks  # указываем, что это не файлы, а «фальшивые» цели
