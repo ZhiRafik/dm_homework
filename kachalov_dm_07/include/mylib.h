@@ -21,12 +21,16 @@ int add_edge(Graph *g, size_t u, size_t v);
 // BFS от вершины start
 // вернуть макс расстояние (в рёбрах) от start до любой достижимой вершины
 // если start вне диапазона или g == NULL -> 0
-uint32_t bfs_farthest(const Graph *g, size_t start);
+int bfs_farthest(const Graph *g, size_t start);
 
 // диаметр графа = макс кратчайшее расстояние между любыми двумя достижимыми вершинами
 // перебираем каждую вершину как старт и берём максимум bfs_farthest()
 // если граф пустой или из одной вершины -> 0
-uint32_t compute_graph_diameter(const Graph *g);
+int compute_graph_diameter(const Graph *g);
+
+// проверяем граф на связность
+// если граф связен, возвращаем 1, иначе -1
+int check_graph_connectivity(const Graph *g);
 
 // освободить память графа
 void free_graph(Graph *g);

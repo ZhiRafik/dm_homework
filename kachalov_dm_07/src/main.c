@@ -29,7 +29,10 @@ int main(void) {
         };
     }
 
-    uint32_t d = compute_graph_diameter(g);
+    int d = compute_graph_diameter(g);
+    if (d == -1) {
+        return 0;
+    }
     printf("Диаметр графа: %u\n", d);
 
     free_graph(g);

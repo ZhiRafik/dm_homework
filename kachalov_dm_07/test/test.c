@@ -65,7 +65,7 @@ static void test_diameter_example_1_a_path(void) {
     assert(add_edge(g, 2, 3) == 0);
     assert(add_edge(g, 0, 4) == 0);
 
-    uint32_t d = compute_graph_diameter(g);
+    int d = compute_graph_diameter(g);
     assert(d == 4);
 
     free_graph(g);
@@ -81,14 +81,10 @@ static void test_diameter_example_2_not_a_path(void) {
 
     assert(add_edge(g, 0, 1) == 0);
     assert(add_edge(g, 1, 4) == 0);
-
-    uint32_t d = compute_graph_diameter(g);
-    assert(d == 2);
-
     assert(add_edge(g, 1, 2) == 0);
     assert(add_edge(g, 2, 3) == 0);
 
-    d = compute_graph_diameter(g);
+    int d = compute_graph_diameter(g);
     assert(d == 3);
 
     free_graph(g);
@@ -117,7 +113,7 @@ static void test_diameter_example_3_complex(void) {
     assert(add_edge(g, 7, 8) == 0);
     assert(add_edge(g, 3, 11) == 0);
 
-    uint32_t d = compute_graph_diameter(g);
+    int d = compute_graph_diameter(g);
     assert(d == 7); // (11 - 3 - 2 - 1 - 5 - 6 - 7 - 8)
 
     free_graph(g);
@@ -148,8 +144,70 @@ static void test_diameter_example_4_complex_with_cycle(void) {
     assert(add_edge(g, 3, 11) == 0);
     assert(add_edge(g, 4, 5) == 0);
 
-    uint32_t d = compute_graph_diameter(g);
-    assert(d == 7); // (11 - 3 - 2 - 1 - 5 - 6 - 7 - 8)
+    int d = compute_graph_diameter(g);
+    assert(d == 7); 
+
+    free_graph(g);
+}
+
+// несвязный граф
+// 0 - 1        2 - 3
+static void test_unconnected_graph_with_inf_1(void) {
+    Graph *g = create_graph(4);
+    assert(g != NULL);
+
+    assert(add_edge(g, 0, 1) == 0);
+    assert(add_edge(g, 2, 3) == 0);
+
+    int d = compute_graph_diameter(g);
+    assert(d == -1); // возвращается минус 1, печатается сообщение, что равен бесконечности
+
+    free_graph(g);
+}
+
+// несвязный граф
+// 0 - 1 - 2 - 3       4 - 5
+static void test_unconnected_graph_with_inf_2(void) {
+    Graph *g = create_graph(6);
+    assert(g != NULL);
+
+    assert(add_edge(g, 0, 1) == 0);
+    assert(add_edge(g, 2, 3) == 0);
+    assert(add_edge(g, 1, 2) == 0);
+    assert(add_edge(g, 4, 5) == 0);
+
+    int d = compute_graph_diameter(g);
+    assert(d == -1); // возвращается минус 1, печатается сообщение, что равен бесконечности
+
+    free_graph(g);
+}
+
+//
+//      9 - 6 - 7 - 8           14
+//          |                    |
+// 10 - 4   5              12 - 13
+//      | / 
+//  0 - 1 - 2 - 3 - 11
+static void test_unconnected_graph_with_inf_3(void) {
+    Graph *g = create_graph(15);
+    assert(g != NULL);
+
+    assert(add_edge(g, 0, 1) == 0);
+    assert(add_edge(g, 1, 2) == 0);
+    assert(add_edge(g, 2, 3) == 0);
+    assert(add_edge(g, 1, 4) == 0);
+    assert(add_edge(g, 4, 10) == 0);
+    assert(add_edge(g, 1, 5) == 0);
+    assert(add_edge(g, 5, 6) == 0);
+    assert(add_edge(g, 6, 9) == 0);
+    assert(add_edge(g, 6, 7) == 0);
+    assert(add_edge(g, 7, 8) == 0);
+    assert(add_edge(g, 3, 11) == 0);
+    assert(add_edge(g, 12, 13) == 0);
+    assert(add_edge(g, 13, 14) == 0);
+
+    int d = compute_graph_diameter(g);
+    assert(d == -1); 
 
     free_graph(g);
 }
@@ -159,7 +217,7 @@ static void test_diameter_single_vertex(void) {
     Graph *g = create_graph(1);
     assert(g != NULL);
 
-    uint32_t d = compute_graph_diameter(g);
+    int d = compute_graph_diameter(g);
     assert(d == 0);
 
     free_graph(g);
@@ -174,6 +232,9 @@ int main(void) {
     test_diameter_example_3_complex();
     test_diameter_example_4_complex_with_cycle();
     test_diameter_single_vertex();
+    test_unconnected_graph_with_inf_1();
+    test_unconnected_graph_with_inf_2();
+    test_unconnected_graph_with_inf_3();
 
     printf("Все тесты прошли успешно!");
     return 0;
