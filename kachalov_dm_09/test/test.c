@@ -29,8 +29,9 @@ static void test_edge_case_invalid_and_self_loop() {
 
     int r = graph_add_edge(g, 1, 1);
     assert(r == 0);
-    assert(graph_degree(g, 1) == 0);
-    assert(graph_has_edge(g, 1, 1) == 0);
+    // теперь петля допустима: степень 1, ребро существует
+    assert(graph_degree(g, 1) == 1);
+    assert(graph_has_edge(g, 1, 1) == 1);
 
     assert(graph_degree(g, 10) == 0);
     assert(graph_has_edge(g, 0, 10) == 0);
@@ -39,26 +40,35 @@ static void test_edge_case_invalid_and_self_loop() {
 }
 
 // две вершины и одно ребро
-// проверка дубликата ребра
+// проверка работы с дубликатом ребра и его упрощения
 static void test_simple_single_edge() {
     graph_t *g = graph_create(2);
     assert(g != NULL);
 
+    // первое ребро 0-1
     assert(graph_add_edge(g, 0, 1) == 0);
     assert(graph_has_edge(g, 0, 1) == 1);
     assert(graph_has_edge(g, 1, 0) == 1);
     assert(graph_degree(g, 0) == 1);
     assert(graph_degree(g, 1) == 1);
 
+    // добавляем дубликат ребра 0-1 (псевдограф: кратные рёбра допустимы)
     int r = graph_add_edge(g, 0, 1);
     assert(r == 0);
-    assert(graph_degree(g, 0) == 1);
-    assert(graph_degree(g, 1) == 1);
-
-    graph_simplify(g);
+    // теперь у каждой вершины по два инцидентных ребра
+    assert(graph_degree(g, 0) == 2);
+    assert(graph_degree(g, 1) == 2);
     assert(graph_has_edge(g, 0, 1) == 1);
-    assert(graph_degree(g, 0) == 1);
+
+    // упрощение: два параллельных ребра 0-1 схлопываются в петлю 1-1
+    graph_simplify(g);
+
+    // ребра 0-1 больше нет
+    assert(graph_has_edge(g, 0, 1) == 0);
+    // должна быть одна петля в вершине 1
+    assert(graph_has_edge(g, 1, 1) == 1);
     assert(graph_degree(g, 1) == 1);
+    assert(graph_degree(g, 0) == 0);
 
     graph_free(g);
 }
@@ -118,10 +128,10 @@ static void test_medium_path_len5() {
     graph_free(g);
 }
 
-// Средний случай 2:
+// Средний случай 2 (обновлённый):
 // цикл 0-1-2-3-0
 // все вершины степени 2
-// после упрощения остаётся одно ребро между двумя вершинами
+// после упрощения остаётся одна вершина с одной петлёй
 static void test_medium_cycle4() {
     graph_t *g = graph_create(4);
     assert(g != NULL);
@@ -134,26 +144,32 @@ static void test_medium_cycle4() {
     graph_simplify(g);
 
     size_t edges_count = 0;
-    size_t u_last = 0;
-    size_t v_last = 0;
+    int has_loop = 0;
+    size_t loop_vertex = 0;
 
+    // считаем рёбра, включая петли, без двойного счёта неориентированных рёбер
     for (size_t u = 0; u < 4; u++) {
-        for (size_t v = u + 1; v < 4; v++) {
+        for (size_t v = u; v < 4; v++) {
             if (graph_has_edge(g, u, v)) {
                 edges_count++;
-                u_last = u;
-                v_last = v;
+                if (u == v) {
+                    has_loop = 1;
+                    loop_vertex = u;
+                }
             }
         }
     }
 
+    // должно быть ровно одно ребро, и это петля
     assert(edges_count == 1);
+    assert(has_loop == 1);
 
-    assert(graph_degree(g, u_last) == 1);
-    assert(graph_degree(g, v_last) == 1);
+    // петля даёт степень 1 в нашей модели
+    assert(graph_degree(g, loop_vertex) == 1);
 
+    // остальные вершины изолированы
     for (size_t v = 0; v < 4; v++) {
-        if (v != u_last && v != v_last) {
+        if (v != loop_vertex) {
             assert(graph_degree(g, v) == 0);
         }
     }
@@ -163,7 +179,7 @@ static void test_medium_cycle4() {
 
 // Сложный случай:
 // путь 0-1-2-3-4 и треугольник 4-5-6-4
-// после серии упрощений остаётся одно ребро 0-6
+// после серии упрощений остаётся одно ребро 0-4
 static void test_complex_mixed_graph() {
     graph_t *g = graph_create(7);
     assert(g != NULL);
@@ -179,17 +195,21 @@ static void test_complex_mixed_graph() {
 
     graph_simplify(g);
 
-    assert(graph_has_edge(g, 0, 6) == 1);
+    // итог: одно ребро 0-4, остальные вершины изолированы
+    assert(graph_has_edge(g, 0, 4) == 1);
     assert(graph_degree(g, 0) == 1);
-    assert(graph_degree(g, 6) == 1);
+    assert(graph_degree(g, 4) == 1);
 
-    for (size_t v = 1; v <= 5; v++) {
+    for (size_t v = 1; v <= 6; v++) {
+        if (v == 4) {
+            continue;
+        }
         assert(graph_degree(g, v) == 0);
     }
 
     for (size_t u = 0; u < 7; u++) {
-        for (size_t v = u + 1; v < 7; v++) {
-            if (u == 0 && v == 6) {
+        for (size_t v = u; v < 7; v++) {
+            if (u == 0 && v == 4) {
                 continue;
             }
             assert(graph_has_edge(g, u, v) == 0);
@@ -264,24 +284,24 @@ static void test_big_graph() {
     graph_simplify(g);
 
     // Ожидаем, что остались только рёбра:
-    // (0,1), (1,2), (1,3), (3,5), (3,7), (3,10)
+    // (0,1), (1,2), (1,3), (3,5), (3,7), (3,8)
     assert(graph_has_edge(g, 0, 1) == 1);
     assert(graph_has_edge(g, 1, 2) == 1);
     assert(graph_has_edge(g, 1, 3) == 1);
     assert(graph_has_edge(g, 3, 5) == 1);
     assert(graph_has_edge(g, 3, 7) == 1);
-    assert(graph_has_edge(g, 3, 10) == 1);
+    assert(graph_has_edge(g, 3, 8) == 1);
 
     // Проверяем, что других рёбер нет
-    for (size_t u = 0; u < 11; ++u) {
-        for (size_t v = u + 1; v < 11; ++v) {
+    for (size_t u = 0; u < 11; u++) {
+        for (size_t v = u + 1; v < 11; v++) {
             int should_exist =
                 (u == 0 && v == 1) ||
                 (u == 1 && v == 2) ||
                 (u == 1 && v == 3) ||
                 (u == 3 && v == 5) ||
                 (u == 3 && v == 7) ||
-                (u == 3 && v == 10);
+                (u == 3 && v == 8);
 
             if (!should_exist) {
                 assert(graph_has_edge(g, u, v) == 0);
@@ -296,11 +316,58 @@ static void test_big_graph() {
     assert(graph_degree(g, 3) == 4);
     assert(graph_degree(g, 5) == 1);
     assert(graph_degree(g, 7) == 1);
-    assert(graph_degree(g, 10) == 1);
+    assert(graph_degree(g, 8) == 1);
 
-    size_t degrees[] = {4, 6, 8, 9};
-    for (size_t i = 0; i < sizeof(degrees) / sizeof(degrees[0]); i++) {
-        assert(graph_degree(g, degrees[i]) == 0);
+    size_t degrees_zero[] = {4, 6, 9, 10};
+    for (size_t i = 0; i < sizeof(degrees_zero) / sizeof(degrees_zero[0]); i++) {
+        assert(graph_degree(g, degrees_zero[i]) == 0);
+    }
+
+    graph_free(g);
+}
+
+// цикл 0-1-2-0 (треугольник)
+// все вершины степени 2
+// после упрощения цикл сжимается в одну вершину с одной петлёй
+static void test_medium_cycle3() {
+    graph_t *g = graph_create(3);
+    assert(g != NULL);
+
+    assert(graph_add_edge(g, 0, 1) == 0);
+    assert(graph_add_edge(g, 1, 2) == 0);
+    assert(graph_add_edge(g, 2, 0) == 0);
+
+    graph_simplify(g);
+
+    // должна остаться ровно одна петля (на какой-то вершине)
+    size_t edges_count = 0;
+    int has_loop = 0;
+    size_t loop_vertex = 0;
+
+    for (size_t u = 0; u < 3; u++) {
+        for (size_t v = u; v < 3; v++) {
+            if (graph_has_edge(g, u, v)) {
+                edges_count++;
+                if (u == v) {
+                    has_loop = 1;
+                    loop_vertex = u;
+                }
+            }
+        }
+    }
+
+    // ровно одно ребро и это петля
+    assert(edges_count == 1);
+    assert(has_loop == 1);
+
+    // степень вершины с петлёй — 1
+    assert(graph_degree(g, loop_vertex) == 1);
+
+    // остальные изолированы
+    for (size_t v = 0; v < 3; v++) {
+        if (v != loop_vertex) {
+            assert(graph_degree(g, v) == 0);
+        }
     }
 
     graph_free(g);
@@ -316,6 +383,9 @@ int main() {
     test_complex_mixed_graph();
     test_two_components();
     test_big_graph();
+    printf("Проверка петли\n");
+    test_medium_cycle3();
+    printf("Петля выполняется\n");
 
     printf("Все тесты пройдены\n");
     return 0;

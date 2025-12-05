@@ -114,7 +114,8 @@ static void remove_neighbor(graph_t *g, size_t v, size_t u) {
     }
 }
 
-// Внутренняя функция удаления неориентированного ребра (u, v)
+// В псевдографе удаляем только ОДНО вхождение данного ребра
+// Для петли (u == v) удаляем одно вхождение u в списке вершины u
 static void remove_edge_undirected(graph_t *g, size_t u, size_t v) {
     if (!g) {
         return;
@@ -122,7 +123,9 @@ static void remove_edge_undirected(graph_t *g, size_t u, size_t v) {
     if (u >= g->n || v >= g->n) {
         return;
     }
+
     if (u == v) {
+        remove_neighbor(g, u, v);
         return;
     }
 
@@ -130,7 +133,8 @@ static void remove_edge_undirected(graph_t *g, size_t u, size_t v) {
     remove_neighbor(g, v, u);
 }
 
-// Добавление неориентированного ребра
+// Добавление неориентированного ребра.
+// Псевдограф: допускаем петли и кратные рёбра.
 int graph_add_edge(graph_t *g, size_t u, size_t v) {
     if (!g) {
         return -1;
@@ -140,16 +144,16 @@ int graph_add_edge(graph_t *g, size_t u, size_t v) {
         return -1;
     }
 
+    // Петля u == v: храним одно вхождение u в списке вершины u.
     if (u == v) {
-        // Не допускаем петель
+        if (ensure_capacity_for_vertex(g, u, g->deg[u] + 1) != 0) {
+            return -2;
+        }
+        g->adj[u][g->deg[u]++] = (int)u;
         return 0;
     }
 
-    if (has_neighbor(g, u, v)) {
-        // Не допускаем кратных рёбер
-        return 0;
-    }
-
+    // Обычное неориентированное ребро u != v.
     if (ensure_capacity_for_vertex(g, u, g->deg[u] + 1) != 0) {
         return -2;
     }
@@ -163,15 +167,13 @@ int graph_add_edge(graph_t *g, size_t u, size_t v) {
     return 0;
 }
 
-// Проверка существования ребра
+// Проверка существования хотя бы одного ребра (u, v).
+// Для петли (u == v) тоже работает.
 int graph_has_edge(const graph_t *g, size_t u, size_t v) {
     if (!g) {
         return 0;
     }
     if (u >= g->n || v >= g->n) {
-        return 0;
-    }
-    if (u == v) {
         return 0;
     }
 
@@ -199,7 +201,8 @@ size_t graph_degree(const graph_t *g, size_t v) {
     return g->deg[v];
 }
 
-// Упрощение графа: последовательное «сглаживание» вершин степени 2
+// Упрощение графа: последовательное "сглаживание" вершин степени 2
+// Псевдограф: в процессе допускаются петли и кратные рёбра
 void graph_simplify(graph_t *g) {
     if (!g) {
         return;
@@ -214,24 +217,25 @@ void graph_simplify(graph_t *g) {
                 continue;
             }
 
-            int u = g->adj[v][0];
-            int w = g->adj[v][1];
+            int u_int = g->adj[v][0];
+            int w_int = g->adj[v][1];
 
-            if ((size_t)u >= g->n || (size_t)w >= g->n) {
+            size_t u = (size_t)u_int;
+            size_t w = (size_t)w_int;
+
+            if (u >= g->n || w >= g->n) {
                 continue;
             }
 
-            // Удаляем рёбра (u, v) и (v, w)
-            remove_edge_undirected(g, (size_t)u, v);
-            remove_edge_undirected(g, v, (size_t)w);
+            // Удаляем два рёбра, инцидентных v
+            remove_edge_undirected(g, u, v);
+            remove_edge_undirected(g, v, w);
 
-            // Вершина v теперь изолирована (степень 0)
-            // Добавляем ребро (u, w), если это разные вершины и ребра ещё нет
-            if ((size_t)u != (size_t)w && !graph_has_edge(g, (size_t)u, (size_t)w)) {
-                // Ошибку выделения памяти здесь игнорируем:
-                // в худшем случае ребро просто не добавится
-                (void)graph_add_edge(g, (size_t)u, (size_t)w);
-            }
+            // Всегда добавляем ребро (u, w):
+            // - если u != w — обычное ребро,
+            // - если u == w — петля,
+            // - если такое ребро уже есть — станет кратным.
+            (void)graph_add_edge(g, u, w);
 
             changed = 1;
         }
